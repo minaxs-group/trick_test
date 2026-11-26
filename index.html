@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GPS＋QR スタンプラリー 動作テスト（景品引き換え付）</title>
+  <!-- QR読み取りライブラリ (jsQR) & QR生成ライブラリ (qrcodejs) -->
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    :root {
+      --bg: #f4f6f9;
+      --card: #ffffff;
+      --primary: #2563eb;
+      --success: #16a34a;
+      --warning: #d97706;
+      --danger: #dc2626;
+      --text: #1e293b;
+      --muted: #64748b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 16px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+    .container { max-width: 540px; margin: 0 auto; }
+    h1 { font-size: 1.25rem; margin: 0 0 12px; }
+    h2 { font-size: 1rem; margin: 0 0 8px; }
+    .card {
+      background: var(--card);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 14px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+    .status-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 0.85rem;
+      font-weight: bold;
+    }
+    .ok { background: #dcfce7; color: var(--success); }
+    .ng { background: #fee2e2; color: var(--danger); }
+    .wait { background: #e2e8f0; color: var(--muted); }
+    .done-badge { background: #fef3c7; color: var(--warning); }
+    button {
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 0.95rem;
+      font-weight: bold;
+      cursor: pointer;
+      width: 100%;
+      margin-top: 8px;
+    }
+    button.secondary { background: #475569; }
+    button.success { background: var(--success); }
+    button.warning { background: var(--warning); }
+    button.danger { background: var(--danger); }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    .row { display: flex; gap: 8px; margin-top: 8px; }
+    .row input {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 0.9rem;
+    }
+    .stamps {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .stamp-slot {
+      border: 2px dashed #cbd5e1;
+      border-radius: 10px;
+      padding: 14px 6px;
+      text-align: center;
+      font-size: 0.85rem;
+      color: var(--muted);
+      background: #f8fafc;
+    }
+    .stamp-slot.done {
+      border: 2px solid var(--success);
+      background: #f0fdf4;
+      color: var(--success);
+      font-weight: bold;
+    }
+    .stamp-icon { font-size: 1.6rem; display: block; margin-bottom: 4px; }
+
+    /* 景品引き換えボックス */
+    .reward-box {
+      border: 2px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 14px;
+      background: #f8fafc;
+      text-align: center;
+      margin-top: 8px;
+    }
+    .reward-box.unlocked {
+      border-color: var(--success);
+      background: #f0fdf4;
+    }
+    .reward-box.redeemed {
+      border-color: var(--warning);
+      background: #fffbeb;
+    }
+    .redeemed-stamp {
+      display: inline-block;
+      border: 3px solid var(--danger);
+      color: var(--danger);
+      font-weight: 900;
+      font-size: 1.1rem;
+      padding: 4px 14px;
+      border-radius: 6px;
+      transform: rotate(-3deg);
+      margin: 6px 0;
+    }
+
+    /* モーダル（景品引き換え画面） */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.72);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      z-index: 100;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal-card {
+      background: #fff;
+      width: 100%;
+      max-width: 420px;
+      border-radius: 16px;
+      padding: 20px;
+      text-align: center;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.25);
+    }
+    .ticket-visual {
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      color: #fff;
+      border-radius: 12px;
+      padding: 18px 14px;
+      margin: 12px 0;
+      position: relative;
+      overflow: hidden;
+    }
+    .ticket-visual.used {
+      background: linear-gradient(135deg, #64748b, #475569);
+    }
+    .pulse-bar {
+      font-size: 0.78rem;
+      background: rgba(255,255,255,0.18);
+      padding: 4px 8px;
+      border-radius: 999px;
+      display: inline-block;
+      margin-bottom: 6px;
+      animation: pulse 1.6s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.45; }
+    }
+
+    #video-wrap {
+      position: relative;
+      width: 100%;
+      background: #000;
+      border-radius: 10px;
+      overflow: hidden;
+      margin-top: 10px;
+      display: none;
+    }
+    video { width: 100%; display: block; }
+    canvas { display: none; }
+    .log {
+      font-size: 0.85rem;
+      padding: 10px;
+      border-radius: 8px;
+      background: #f1f5f9;
+      margin-top: 10px;
+      word-break: break-all;
+    }
+    .qr-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-top: 12px;
+      text-align: center;
+    }
+    .qr-box {
+      background: #fff;
+      padding: 8px;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+    }
+    .qr-box div { display: flex; justify-content: center; }
+    .qr-box p { margin: 6px 0 0; font-size: 0.8rem; font-weight: bold; }
+    .small { font-size: 0.8rem; color: var(--muted); }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>📍 GPS＋QR スタンプラリー テスト</h1>
+
+  <!-- 1. スタンプ台紙 -->
+  <div class="card">
+    <h2>1. スタンプ獲得状況（<span id="stamp-count">0</span> / 3）</h2>
+    <div class="stamps">
+      <div class="stamp-slot" id="slot-SPOT_1">
+        <span class="stamp-icon">⬜</span>スポット1<br><span class="small">入口エリア</span>
+      </div>
+      <div class="stamp-slot" id="slot-SPOT_2">
+        <span class="stamp-icon">⬜</span>スポット2<br><span class="small">中央ホール</span>
+      </div>
+      <div class="stamp-slot" id="slot-SPOT_3">
+        <span class="stamp-icon">⬜</span>スポット3<br><span class="small">休憩コーナー</span>
+      </div>
+    </div>
+
+    <!-- 景品引き換えステータス枠 -->
+    <div class="reward-box" id="reward-box">
+      <div id="reward-status-text" class="small">スタンプを3つすべて集めると景品と引き換えられます。</div>
+      <div id="redeemed-info" style="display:none;">
+        <div class="redeemed-stamp">景品引き換え済み</div>
+        <div class="small" id="redeemed-time"></div>
+      </div>
+      <button id="open-reward-btn" class="success" onclick="openRewardModal()" disabled>🎁 景品引き換え画面を開く</button>
+    </div>
+
+    <button class="secondary" onclick="resetAllData()">テストデータをすべてリセット</button>
+  </div>
+
+  <!-- 2. GPSエリア判定設定 -->
+  <div class="card">
+    <h2>2. 施設内GPS判定（テスト設定）</h2>
+    <div>判定ステータス: <span id="gps-badge" class="status-badge wait">未取得</span></div>
+    <p class="small" id="gps-detail">「現在地を取得」を押してGPS精度と距離を確認してください。</p>
+
+    <div class="row">
+      <input type="number" step="any" id="target-lat" placeholder="施設の緯度 (例: 35.6895)">
+      <input type="number" step="any" id="target-lng" placeholder="施設の経度 (例: 139.6917)">
+    </div>
+    <button class="secondary" onclick="setHereAsTarget()">📍 今いる場所を施設の中心に設定</button>
+
+    <div style="margin-top: 12px;">
+      <label class="small">許容半径: <strong id="radius-label">100</strong> m</label>
+      <input type="range" id="radius-range" min="10" max="500" step="10" value="100" style="width:100%;" oninput="updateRadius()">
+    </div>
+    <button onclick="checkGPS()">🔄 現在地を再計測してエリア判定</button>
+  </div>
+
+  <!-- 3. QRコード読み取り -->
+  <div class="card">
+    <h2>3. QRコードを読み取って押印</h2>
+    <p class="small">GPSが「エリア内（OK）」のときのみスタンプが押せます。</p>
+    <button id="scan-btn" onclick="startCamera()">📷 カメラを起動してQRスキャン</button>
+    <button id="stop-btn" class="danger" onclick="stopCamera()" style="display:none;">カメラを停止</button>
+    <div id="video-wrap">
+      <video id="video" playsinline></video>
+      <canvas id="canvas"></canvas>
+    </div>
+    <div class="log" id="scan-log">待機中...</div>
+  </div>
+
+  <!-- 4. テスト用QRコード表示 -->
+  <div class="card">
+    <h2>4. テスト用QRコード（印刷・別画面表示用）</h2>
+    <p class="small">PC画面に表示するか印刷して、スマホのカメラで読み取ってテストしてください。</p>
+    <div class="qr-grid">
+      <div class="qr-box"><div id="qr-1"></div><p>SPOT_1</p></div>
+      <div class="qr-box"><div id="qr-2"></div><p>SPOT_2</p></div>
+      <div class="qr-box"><div id="qr-3"></div><p>SPOT_3</p></div>
+    </div>
+  </div>
+</div>
+
+<!-- 景品引き換えモーダル画面 -->
+<div class="modal-backdrop" id="reward-modal">
+  <div class="modal-card">
+    <h2>🎁 コンプリート特典引き換え</h2>
+    <p class="small">受付スタッフにこの画面をご提示ください。<br><strong>※お客様ご自身で「引き換え済みにする」を押さないでください。</strong></p>
+
+    <div class="ticket-visual" id="ticket-visual">
+      <div class="pulse-bar" id="live-clock">● LIVE認証中</div>
+      <div style="font-size: 1.2rem; font-weight: bold; margin: 4px 0;">スタンプラリー達成特典</div>
+      <div style="font-size: 0.9rem; opacity: 0.92;">ノベルティ / クーポン 1回引換券</div>
+      <div id="modal-redeemed-badge" style="display:none; margin-top: 10px;">
+        <span class="redeemed-stamp" style="background:#fff;">引き換え済み</span>
+        <div style="font-size: 0.8rem; margin-top: 4px;" id="modal-redeemed-time"></div>
+      </div>
+    </div>
+
+    <button id="confirm-redeem-btn" class="warning" onclick="redeemReward()">✅ スタッフ確認済：引き換え済みにする</button>
+    <button class="secondary" onclick="closeRewardModal()">閉じる</button>
+  </div>
+</div>
+
+<script>
+  const VALID_SPOTS = {
+    "SPOT_1": "スポット1（入口エリア）",
+    "SPOT_2": "スポット2（中央ホール）",
+    "SPOT_3": "スポット3（休憩コーナー）"
+  };
+
+  let currentPos = null;
+  let isInsideArea = false;
+  let videoStream = null;
+  let scanTimer = null;
+  let clockTimer = null;
+
+  window.addEventListener("DOMContentLoaded", () => {
+    new QRCode(document.getElementById("qr-1"), { text: "SPOT_1", width: 90, height: 90 });
+    new QRCode(document.getElementById("qr-2"), { text: "SPOT_2", width: 90, height: 90 });
+    new QRCode(document.getElementById("qr-3"), { text: "SPOT_3", width: 90, height: 90 });
+
+    const savedLat = localStorage.getItem("test_target_lat");
+    const savedLng = localStorage.getItem("test_target_lng");
+    if (savedLat && savedLng) {
+      document.getElementById("target-lat").value = savedLat;
+      document.getElementById("target-lng").value = savedLng;
+    }
+    renderUI();
+  });
+
+  function updateRadius() {
+    document.getElementById("radius-label").textContent = document.getElementById("radius-range").value;
+    evaluateDistance();
+  }
+
+  function setHereAsTarget() {
+    navigator.geolocation.getCurrentPosition(pos => {
+      const lat = pos.coords.latitude.toFixed(6);
+      const lng = pos.coords.longitude.toFixed(6);
+      document.getElementById("target-lat").value = lat;
+      document.getElementById("target-lng").value = lng;
+      localStorage.setItem("test_target_lat", lat);
+      localStorage.setItem("test_target_lng", lng);
+      currentPos = pos.coords;
+      evaluateDistance();
+    }, err => {
+      alert("位置情報の取得に失敗しました: " + err.message);
+    }, { enableHighAccuracy: true });
+  }
+
+  function checkGPS() {
+    const badge = document.getElementById("gps-badge");
+    badge.className = "status-badge wait";
+    badge.textContent = "計測中...";
+    navigator.geolocation.getCurrentPosition(pos => {
+      currentPos = pos.coords;
+      evaluateDistance();
+    }, err => {
+      badge.className = "status-badge ng";
+      badge.textContent = "取得エラー";
+      document.getElementById("gps-detail").textContent = "エラー: " + err.message + "（ブラウザの位置情報許可を確認してください）";
+      isInsideArea = false;
+    }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
+  }
+
+  function evaluateDistance() {
+    const tLat = parseFloat(document.getElementById("target-lat").value);
+    const tLng = parseFloat(document.getElementById("target-lng").value);
+    const radius = parseFloat(document.getElementById("radius-range").value);
+    const badge = document.getElementById("gps-badge");
+    const detail = document.getElementById("gps-detail");
+
+    if (!currentPos) return;
+    if (isNaN(tLat) || isNaN(tLng)) {
+      detail.textContent = `現在地: ${currentPos.latitude.toFixed(6)}, ${currentPos.longitude.toFixed(6)}（精度 ±${Math.round(currentPos.accuracy)}m）※施設の中心座標を設定してください`;
+      return;
+    }
+
+    localStorage.setItem("test_target_lat", tLat);
+    localStorage.setItem("test_target_lng", tLng);
+
+    const dist = calcDistanceMeters(currentPos.latitude, currentPos.longitude, tLat, tLng);
+    isInsideArea = dist <= radius;
+
+    if (isInsideArea) {
+      badge.className = "status-badge ok";
+      badge.textContent = `エリア内 OK（中心から約 ${Math.round(dist)}m）`;
+    } else {
+      badge.className = "status-badge ng";
+      badge.textContent = `エリア外 NG（中心から約 ${Math.round(dist)}m）`;
+    }
+    detail.textContent = `現在地: ${currentPos.latitude.toFixed(6)}, ${currentPos.longitude.toFixed(6)} / GPS誤差精度: ±${Math.round(currentPos.accuracy)}m`;
+  }
+
+  function calcDistanceMeters(lat1, lon1, lat2, lon2) {
+    const R = 6371000;
+    const toRad = deg => deg * Math.PI / 180;
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2)**2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
+  async function startCamera() {
+    const log = document.getElementById("scan-log");
+    try {
+      videoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+      const video = document.getElementById("video");
+      video.srcObject = videoStream;
+      await video.play();
+      document.getElementById("video-wrap").style.display = "block";
+      document.getElementById("scan-btn").style.display = "none";
+      document.getElementById("stop-btn").style.display = "block";
+      log.textContent = "QRコードを枠内に映してください...";
+      scanTimer = requestAnimationFrame(tickScan);
+    } catch (e) {
+      log.textContent = "カメラ起動エラー: " + e.message + "（HTTPS環境かカメラ許可を確認してください）";
+    }
+  }
+
+  function stopCamera() {
+    if (scanTimer) cancelAnimationFrame(scanTimer);
+    if (videoStream) {
+      videoStream.getTracks().forEach(t => t.stop());
+      videoStream = null;
+    }
+    document.getElementById("video-wrap").style.display = "none";
+    document.getElementById("scan-btn").style.display = "block";
+    document.getElementById("stop-btn").style.display = "none";
+  }
+
+  function tickScan() {
+    const video = document.getElementById("video");
+    const canvas = document.getElementById("canvas");
+    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const code = jsQR(imgData.data, imgData.width, imgData.height, { inversionAttempts: "dontInvert" });
+
+      if (code && code.data) {
+        handleQRCode(code.data.trim());
+        stopCamera();
+        return;
+      }
+    }
+    scanTimer = requestAnimationFrame(tickScan);
+  }
+
+  function handleQRCode(text) {
+    const log = document.getElementById("scan-log");
+    if (!VALID_SPOTS[text]) {
+      log.textContent = `❌ 対象外のQRコードです: "${text}"`;
+      return;
+    }
+    if (!isInsideArea) {
+      log.textContent = `⚠️ QR（${VALID_SPOTS[text]}）は認識しましたが、GPSが「エリア外」のため押印できません。`;
+      return;
+    }
+    const collected = JSON.parse(localStorage.getItem("test_stamps") || "{}");
+    collected[text] = true;
+    localStorage.setItem("test_stamps", JSON.stringify(collected));
+    renderUI();
+    log.textContent = `🎉 スタンプ獲得！「${VALID_SPOTS[text]}」を押印しました！`;
+  }
+
+  // 画面全体の表示更新（スタンプ・引き換え状態・モーダル）
+  function renderUI() {
+    const collected = JSON.parse(localStorage.getItem("test_stamps") || "{}");
+    const redeemedData = JSON.parse(localStorage.getItem("test_redeemed") || "null");
+    let count = 0;
+
+    Object.keys(VALID_SPOTS).forEach(key => {
+      const el = document.getElementById("slot-" + key);
+      if (collected[key]) {
+        count++;
+        el.classList.add("done");
+        el.querySelector(".stamp-icon").textContent = "✅";
+      } else {
+        el.classList.remove("done");
+        el.querySelector(".stamp-icon").textContent = "⬜";
+      }
+    });
+
+    document.getElementById("stamp-count").textContent = count;
+    const isCompleted = count === Object.keys(VALID_SPOTS).length;
+
+    const rewardBox = document.getElementById("reward-box");
+    const statusText = document.getElementById("reward-status-text");
+    const redeemedInfo = document.getElementById("redeemed-info");
+    const redeemedTime = document.getElementById("redeemed-time");
+    const openBtn = document.getElementById("open-reward-btn");
+
+    // モーダル内の表示要素
+    const ticketVisual = document.getElementById("ticket-visual");
+    const modalRedeemedBadge = document.getElementById("modal-redeemed-badge");
+    const modalRedeemedTime = document.getElementById("modal-redeemed-time");
+    const confirmBtn = document.getElementById("confirm-redeem-btn");
+
+    rewardBox.classList.remove("unlocked", "redeemed");
+
+    if (redeemedData && redeemedData.redeemed) {
+      // 引き換え済み状態
+      rewardBox.classList.add("redeemed");
+      statusText.style.display = "none";
+      redeemedInfo.style.display = "block";
+      redeemedTime.textContent = `引き換え日時: ${redeemedData.timestamp}`;
+      openBtn.disabled = false;
+      openBtn.className = "secondary";
+      openBtn.textContent = "🎫 引き換え済み履歴を確認する";
+
+      ticketVisual.classList.add("used");
+      modalRedeemedBadge.style.display = "block";
+      modalRedeemedTime.textContent = `処理日時: ${redeemedData.timestamp}`;
+      confirmBtn.disabled = true;
+      confirmBtn.textContent = "引き換え完了済み";
+    } else if (isCompleted) {
+      // 達成済み・未引き換え状態
+      rewardBox.classList.add("unlocked");
+      statusText.style.display = "block";
+      statusText.innerHTML = `<strong style="color:var(--success);">🎉 全スタンプ達成！景品と引き換え可能です。</strong>`;
+      redeemedInfo.style.display = "none";
+      openBtn.disabled = false;
+      openBtn.className = "success";
+      openBtn.textContent = "🎁 景品引き換え画面を開く";
+
+      ticketVisual.classList.remove("used");
+      modalRedeemedBadge.style.display = "none";
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = "✅ スタッフ確認済：引き換え済みにする";
+    } else {
+      // 未達成状態
+      statusText.style.display = "block";
+      statusText.textContent = `あと ${3 - count} 個スタンプを集めると景品引き換え画面が開きます。`;
+      redeemedInfo.style.display = "none";
+      openBtn.disabled = true;
+      openBtn.className = "success";
+      openBtn.textContent = "🎁 景品引き換え画面を開く";
+    }
+  }
+
+  function openRewardModal() {
+    document.getElementById("reward-modal").classList.add("open");
+    updateLiveClock();
+    clockTimer = setInterval(updateLiveClock, 1000);
+  }
+
+  function closeRewardModal() {
+    document.getElementById("reward-modal").classList.remove("open");
+    if (clockTimer) clearInterval(clockTimer);
+  }
+
+  // スクリーンショット使い回し防止用のリアルタイム時計表示
+  function updateLiveClock() {
+    const now = new Date();
+    const str = now.toLocaleString("ja-JP", {
+      year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit"
+    });
+    document.getElementById("live-clock").textContent = `● LIVE表示中 ${str}`;
+  }
+
+  function redeemReward() {
+    const ok = confirm("【スタッフ確認】\n景品をお渡ししましたか？\n「OK」を押すと引き換え済みになり、元に戻せません。");
+    if (!ok) return;
+
+    const now = new Date();
+    const timestamp = now.toLocaleString("ja-JP", {
+      year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit"
+    });
+
+    localStorage.setItem("test_redeemed", JSON.stringify({
+      redeemed: true,
+      timestamp: timestamp
+    }));
+
+    renderUI();
+    document.getElementById("scan-log").textContent = `🎁 景品引き換え完了を記録しました（${timestamp}）`;
+  }
+
+  function resetAllData() {
+    if (!confirm("スタンプ獲得状況と引き換え済み履歴をすべてリセットしますか？")) return;
+    localStorage.removeItem("test_stamps");
+    localStorage.removeItem("test_redeemed");
+    renderUI();
+    document.getElementById("scan-log").textContent = "スタンプと引き換え履歴をリセットしました。";
+  }
+</script>
+</body>
+</html>
