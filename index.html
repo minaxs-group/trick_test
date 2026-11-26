@@ -3,8 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>GPS＋QR スタンプラリー 動作テスト（景品引き換え付）</title>
-  <!-- QR読み取りライブラリ (jsQR) & QR生成ライブラリ (qrcodejs) -->
+  <title>GPS＋QR スタンプラリー テスト（特典2種・記念フォトフレーム付）</title>
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <style>
@@ -30,6 +29,7 @@
     .container { max-width: 540px; margin: 0 auto; }
     h1 { font-size: 1.25rem; margin: 0 0 12px; }
     h2 { font-size: 1rem; margin: 0 0 8px; }
+    h3 { font-size: 0.95rem; margin: 0 0 6px; }
     .card {
       background: var(--card);
       border-radius: 12px;
@@ -47,7 +47,6 @@
     .ok { background: #dcfce7; color: var(--success); }
     .ng { background: #fee2e2; color: var(--danger); }
     .wait { background: #e2e8f0; color: var(--muted); }
-    .done-badge { background: #fef3c7; color: var(--warning); }
     button {
       background: var(--primary);
       color: #fff;
@@ -64,6 +63,7 @@
     button.success { background: var(--success); }
     button.warning { background: var(--warning); }
     button.danger { background: var(--danger); }
+    button.purple { background: #7c3aed; }
     button:disabled { opacity: 0.45; cursor: not-allowed; }
     .row { display: flex; gap: 8px; margin-top: 8px; }
     .row input {
@@ -96,20 +96,24 @@
     }
     .stamp-icon { font-size: 1.6rem; display: block; margin-bottom: 4px; }
 
-    /* 景品引き換えボックス */
-    .reward-box {
+    /* 景品選択カード群 */
+    .reward-list {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .reward-item {
       border: 2px solid #e2e8f0;
       border-radius: 10px;
-      padding: 14px;
+      padding: 12px;
       background: #f8fafc;
-      text-align: center;
-      margin-top: 8px;
     }
-    .reward-box.unlocked {
-      border-color: var(--success);
-      background: #f0fdf4;
+    .reward-item.unlocked {
+      border-color: #cbd5e1;
+      background: #ffffff;
     }
-    .reward-box.redeemed {
+    .reward-item.redeemed {
       border-color: var(--warning);
       background: #fffbeb;
     }
@@ -118,31 +122,34 @@
       border: 3px solid var(--danger);
       color: var(--danger);
       font-weight: 900;
-      font-size: 1.1rem;
-      padding: 4px 14px;
+      font-size: 0.95rem;
+      padding: 2px 10px;
       border-radius: 6px;
-      transform: rotate(-3deg);
-      margin: 6px 0;
+      transform: rotate(-2deg);
+      margin: 4px 0;
     }
 
-    /* モーダル（景品引き換え画面） */
+    /* モーダル共通 */
     .modal-backdrop {
       position: fixed;
       inset: 0;
-      background: rgba(15, 23, 42, 0.72);
+      background: rgba(15, 23, 42, 0.75);
       display: none;
       align-items: center;
       justify-content: center;
-      padding: 16px;
+      padding: 14px;
       z-index: 100;
+      overflow-y: auto;
     }
     .modal-backdrop.open { display: flex; }
     .modal-card {
       background: #fff;
       width: 100%;
-      max-width: 420px;
+      max-width: 440px;
+      max-height: 92vh;
+      overflow-y: auto;
       border-radius: 16px;
-      padding: 20px;
+      padding: 18px;
       text-align: center;
       box-shadow: 0 10px 25px rgba(0,0,0,0.25);
     }
@@ -150,18 +157,16 @@
       background: linear-gradient(135deg, #2563eb, #1d4ed8);
       color: #fff;
       border-radius: 12px;
-      padding: 18px 14px;
-      margin: 12px 0;
-      position: relative;
-      overflow: hidden;
+      padding: 16px 12px;
+      margin: 10px 0;
     }
     .ticket-visual.used {
       background: linear-gradient(135deg, #64748b, #475569);
     }
     .pulse-bar {
       font-size: 0.78rem;
-      background: rgba(255,255,255,0.18);
-      padding: 4px 8px;
+      background: rgba(255,255,255,0.2);
+      padding: 3px 8px;
       border-radius: 999px;
       display: inline-block;
       margin-bottom: 6px;
@@ -170,6 +175,25 @@
     @keyframes pulse {
       0%, 100% { opacity: 1; }
       50% { opacity: 0.45; }
+    }
+
+    /* フォトフレーム合成キャンバス */
+    #frame-canvas {
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      border-radius: 10px;
+      border: 1px solid #cbd5e1;
+      background: #e2e8f0;
+      touch-action: none;
+      cursor: grab;
+      display: block;
+      margin: 10px auto;
+    }
+    #frame-canvas:active { cursor: grabbing; }
+    .control-group {
+      text-align: left;
+      margin-top: 8px;
+      font-size: 0.85rem;
     }
 
     #video-wrap {
@@ -182,7 +206,7 @@
       display: none;
     }
     video { width: 100%; display: block; }
-    canvas { display: none; }
+    #scan-canvas { display: none; }
     .log {
       font-size: 0.85rem;
       padding: 10px;
@@ -213,7 +237,7 @@
 <div class="container">
   <h1>📍 GPS＋QR スタンプラリー テスト</h1>
 
-  <!-- 1. スタンプ台紙 -->
+  <!-- 1. スタンプ台紙＆景品選択 -->
   <div class="card">
     <h2>1. スタンプ獲得状況（<span id="stamp-count">0</span> / 3）</h2>
     <div class="stamps">
@@ -228,14 +252,28 @@
       </div>
     </div>
 
-    <!-- 景品引き換えステータス枠 -->
-    <div class="reward-box" id="reward-box">
-      <div id="reward-status-text" class="small">スタンプを3つすべて集めると景品と引き換えられます。</div>
-      <div id="redeemed-info" style="display:none;">
-        <div class="redeemed-stamp">景品引き換え済み</div>
-        <div class="small" id="redeemed-time"></div>
+    <!-- 景品2種エリア -->
+    <div style="margin-top: 14px;">
+      <h2>🎁 達成特典（2種類から選択）</h2>
+      <p class="small" id="reward-guide">スタンプを3つすべて集めると特典が解放されます。</p>
+
+      <div class="reward-list">
+        <!-- 特典A：ノベルティ/クーポン引き換え -->
+        <div class="reward-item" id="box-reward-a">
+          <h3>特典A：ノベルティ / クーポン引き換え</h3>
+          <p class="small">受付スタッフ確認用の引き換え画面を表示します。</p>
+          <div id="status-reward-a" class="small"></div>
+          <button id="btn-reward-a" class="success" onclick="openTicketModal()" disabled>🎫 特典A 引き換え画面を開く</button>
+        </div>
+
+        <!-- 特典B：記念フォトフレーム -->
+        <div class="reward-item" id="box-reward-b">
+          <h3>特典B：記念フォトフレーム作成</h3>
+          <p class="small">手持ちの写真を選んでスタンプ達成フレームに貼り付け、画像保存できます。</p>
+          <div id="status-reward-b" class="small"></div>
+          <button id="btn-reward-b" class="purple" onclick="openFrameModal()" disabled>📸 記念フォトフレームを開く</button>
+        </div>
       </div>
-      <button id="open-reward-btn" class="success" onclick="openRewardModal()" disabled>🎁 景品引き換え画面を開く</button>
     </div>
 
     <button class="secondary" onclick="resetAllData()">テストデータをすべてリセット</button>
@@ -268,7 +306,7 @@
     <button id="stop-btn" class="danger" onclick="stopCamera()" style="display:none;">カメラを停止</button>
     <div id="video-wrap">
       <video id="video" playsinline></video>
-      <canvas id="canvas"></canvas>
+      <canvas id="scan-canvas"></canvas>
     </div>
     <div class="log" id="scan-log">待機中...</div>
   </div>
@@ -285,24 +323,51 @@
   </div>
 </div>
 
-<!-- 景品引き換えモーダル画面 -->
-<div class="modal-backdrop" id="reward-modal">
+<!-- 特典A：スタッフ確認モーダル -->
+<div class="modal-backdrop" id="ticket-modal">
   <div class="modal-card">
-    <h2>🎁 コンプリート特典引き換え</h2>
+    <h2>🎫 特典A：景品引き換え</h2>
     <p class="small">受付スタッフにこの画面をご提示ください。<br><strong>※お客様ご自身で「引き換え済みにする」を押さないでください。</strong></p>
 
     <div class="ticket-visual" id="ticket-visual">
-      <div class="pulse-bar" id="live-clock">● LIVE認証中</div>
-      <div style="font-size: 1.2rem; font-weight: bold; margin: 4px 0;">スタンプラリー達成特典</div>
-      <div style="font-size: 0.9rem; opacity: 0.92;">ノベルティ / クーポン 1回引換券</div>
-      <div id="modal-redeemed-badge" style="display:none; margin-top: 10px;">
+      <div class="pulse-bar" id="live-clock">● LIVE表示中</div>
+      <div style="font-size: 1.15rem; font-weight: bold; margin: 4px 0;">スタンプラリー達成特典（A）</div>
+      <div style="font-size: 0.88rem; opacity: 0.92;">ノベルティ / クーポン 1回引換券</div>
+      <div id="ticket-redeemed-badge" style="display:none; margin-top: 10px;">
         <span class="redeemed-stamp" style="background:#fff;">引き換え済み</span>
-        <div style="font-size: 0.8rem; margin-top: 4px;" id="modal-redeemed-time"></div>
+        <div style="font-size: 0.8rem; margin-top: 4px;" id="ticket-redeemed-time"></div>
       </div>
     </div>
 
-    <button id="confirm-redeem-btn" class="warning" onclick="redeemReward()">✅ スタッフ確認済：引き換え済みにする</button>
-    <button class="secondary" onclick="closeRewardModal()">閉じる</button>
+    <button id="confirm-ticket-btn" class="warning" onclick="redeemRewardA()">✅ スタッフ確認済：引き換え済みにする</button>
+    <button class="secondary" onclick="closeTicketModal()">閉じる</button>
+  </div>
+</div>
+
+<!-- 特典B：記念フォトフレームモーダル -->
+<div class="modal-backdrop" id="frame-modal">
+  <div class="modal-card">
+    <h2>📸 特典B：記念フォトフレーム</h2>
+    <p class="small">写真を選んでドラッグで位置調整・スライダーで拡大縮小ができます。</p>
+
+    <input type="file" id="photo-input" accept="image/*" onchange="handlePhotoUpload(event)" style="width:100%; font-size:0.85rem; margin-top:6px;">
+
+    <canvas id="frame-canvas" width="800" height="600"></canvas>
+
+    <div class="control-group">
+      <label>写真の拡大率: <strong id="zoom-val">100</strong>%</label>
+      <input type="range" id="zoom-range" min="30" max="250" value="100" style="width:100%;" oninput="updateZoom()">
+    </div>
+    <div class="control-group">
+      <label>フレームデザイン:</label>
+      <select id="frame-style" onchange="drawFrame()" style="width:100%; padding:6px; border-radius:6px; border:1px solid #cbd5e1;">
+        <option value="festival">フェス・イベント風（ゴールド＆ネイビー）</option>
+        <option value="pop">ポップ・カラフル風（コーラル＆ミント）</option>
+      </select>
+    </div>
+
+    <button id="save-frame-btn" class="success" onclick="saveFrameImage()">💾 フォトフレーム画像を保存（利用済みに記録）</button>
+    <button class="secondary" onclick="closeFrameModal()">閉じる</button>
   </div>
 </div>
 
@@ -319,6 +384,15 @@
   let scanTimer = null;
   let clockTimer = null;
 
+  // フォトフレーム用状態
+  let uploadedImg = null;
+  let imgScale = 1.0;
+  let imgOffsetX = 0;
+  let imgOffsetY = 0;
+  let isDragging = false;
+  let dragStartX = 0;
+  let dragStartY = 0;
+
   window.addEventListener("DOMContentLoaded", () => {
     new QRCode(document.getElementById("qr-1"), { text: "SPOT_1", width: 90, height: 90 });
     new QRCode(document.getElementById("qr-2"), { text: "SPOT_2", width: 90, height: 90 });
@@ -330,9 +404,36 @@
       document.getElementById("target-lat").value = savedLat;
       document.getElementById("target-lng").value = savedLng;
     }
+
+    initCanvasDrag();
+    drawFrame();
     renderUI();
   });
 
+  function getRewardsState() {
+    return JSON.parse(localStorage.getItem("test_rewards_state") || '{"rewardA":null,"rewardB":null}');
+  }
+
+  function saveRewardsState(state) {
+    localStorage.setItem("test_rewards_state", JSON.stringify(state));
+  }
+
+  function formatNow() {
+    return new Date().toLocaleString("ja-JP", {
+      year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit"
+    });
+  }
+
+  function formatDateDot() {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}.${m}.${day}`;
+  }
+
+  // GPS関連
   function updateRadius() {
     document.getElementById("radius-label").textContent = document.getElementById("radius-range").value;
     evaluateDistance();
@@ -406,6 +507,7 @@
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
 
+  // QRスキャン関連
   async function startCamera() {
     const log = document.getElementById("scan-log");
     try {
@@ -436,7 +538,7 @@
 
   function tickScan() {
     const video = document.getElementById("video");
-    const canvas = document.getElementById("canvas");
+    const canvas = document.getElementById("scan-canvas");
     if (video.readyState === video.HAVE_ENOUGH_DATA) {
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
@@ -471,10 +573,10 @@
     log.textContent = `🎉 スタンプ獲得！「${VALID_SPOTS[text]}」を押印しました！`;
   }
 
-  // 画面全体の表示更新（スタンプ・引き換え状態・モーダル）
+  // UI全体更新
   function renderUI() {
     const collected = JSON.parse(localStorage.getItem("test_stamps") || "{}");
-    const redeemedData = JSON.parse(localStorage.getItem("test_redeemed") || "null");
+    const rewards = getRewardsState();
     let count = 0;
 
     Object.keys(VALID_SPOTS).forEach(key => {
@@ -491,108 +593,215 @@
 
     document.getElementById("stamp-count").textContent = count;
     const isCompleted = count === Object.keys(VALID_SPOTS).length;
+    const guide = document.getElementById("reward-guide");
 
-    const rewardBox = document.getElementById("reward-box");
-    const statusText = document.getElementById("reward-status-text");
-    const redeemedInfo = document.getElementById("redeemed-info");
-    const redeemedTime = document.getElementById("redeemed-time");
-    const openBtn = document.getElementById("open-reward-btn");
+    if (isCompleted) {
+      guide.innerHTML = `<strong style="color:var(--success);">🎉 全スタンプ達成！お好きな特典をお選びください。</strong>`;
+    } else {
+      guide.textContent = `あと ${3 - count} 個スタンプを集めると特典が解放されます。`;
+    }
 
-    // モーダル内の表示要素
+    // 特典A状態
+    const boxA = document.getElementById("box-reward-a");
+    const statusA = document.getElementById("status-reward-a");
+    const btnA = document.getElementById("btn-reward-a");
     const ticketVisual = document.getElementById("ticket-visual");
-    const modalRedeemedBadge = document.getElementById("modal-redeemed-badge");
-    const modalRedeemedTime = document.getElementById("modal-redeemed-time");
-    const confirmBtn = document.getElementById("confirm-redeem-btn");
+    const ticketBadge = document.getElementById("ticket-redeemed-badge");
+    const ticketTime = document.getElementById("ticket-redeemed-time");
+    const confirmTicketBtn = document.getElementById("confirm-ticket-btn");
 
-    rewardBox.classList.remove("unlocked", "redeemed");
-
-    if (redeemedData && redeemedData.redeemed) {
-      // 引き換え済み状態
-      rewardBox.classList.add("redeemed");
-      statusText.style.display = "none";
-      redeemedInfo.style.display = "block";
-      redeemedTime.textContent = `引き換え日時: ${redeemedData.timestamp}`;
-      openBtn.disabled = false;
-      openBtn.className = "secondary";
-      openBtn.textContent = "🎫 引き換え済み履歴を確認する";
+    boxA.classList.remove("unlocked", "redeemed");
+    if (rewards.rewardA) {
+      boxA.classList.add("redeemed");
+      statusA.innerHTML = `<span class="redeemed-stamp">引き換え済み</span><br>日時: ${rewards.rewardA}`;
+      btnA.disabled = false;
+      btnA.className = "secondary";
+      btnA.textContent = "🎫 特典A 引き換え履歴を確認";
 
       ticketVisual.classList.add("used");
-      modalRedeemedBadge.style.display = "block";
-      modalRedeemedTime.textContent = `処理日時: ${redeemedData.timestamp}`;
-      confirmBtn.disabled = true;
-      confirmBtn.textContent = "引き換え完了済み";
-    } else if (isCompleted) {
-      // 達成済み・未引き換え状態
-      rewardBox.classList.add("unlocked");
-      statusText.style.display = "block";
-      statusText.innerHTML = `<strong style="color:var(--success);">🎉 全スタンプ達成！景品と引き換え可能です。</strong>`;
-      redeemedInfo.style.display = "none";
-      openBtn.disabled = false;
-      openBtn.className = "success";
-      openBtn.textContent = "🎁 景品引き換え画面を開く";
+      ticketBadge.style.display = "block";
+      ticketTime.textContent = `処理日時: ${rewards.rewardA}`;
+      confirmTicketBtn.disabled = true;
+      confirmTicketBtn.textContent = "引き換え完了済み";
+    } else {
+      if (isCompleted) boxA.classList.add("unlocked");
+      statusA.textContent = isCompleted ? "引き換え可能" : "未達成（ロック中）";
+      btnA.disabled = !isCompleted;
+      btnA.className = "success";
+      btnA.textContent = "🎫 特典A 引き換え画面を開く";
 
       ticketVisual.classList.remove("used");
-      modalRedeemedBadge.style.display = "none";
-      confirmBtn.disabled = false;
-      confirmBtn.textContent = "✅ スタッフ確認済：引き換え済みにする";
+      ticketBadge.style.display = "none";
+      confirmTicketBtn.disabled = false;
+      confirmTicketBtn.textContent = "✅ スタッフ確認済：引き換え済みにする";
+    }
+
+    // 特典B状態
+    const boxB = document.getElementById("box-reward-b");
+    const statusB = document.getElementById("status-reward-b");
+    const btnB = document.getElementById("btn-reward-b");
+
+    boxB.classList.remove("unlocked", "redeemed");
+    if (rewards.rewardB) {
+      boxB.classList.add("redeemed");
+      statusB.innerHTML = `<span class="redeemed-stamp">作成・利用済み</span><br>日時: ${rewards.rewardB}`;
+      btnB.disabled = false;
+      btnB.className = "secondary";
+      btnB.textContent = "📸 フォトフレームをもう一度開く";
     } else {
-      // 未達成状態
-      statusText.style.display = "block";
-      statusText.textContent = `あと ${3 - count} 個スタンプを集めると景品引き換え画面が開きます。`;
-      redeemedInfo.style.display = "none";
-      openBtn.disabled = true;
-      openBtn.className = "success";
-      openBtn.textContent = "🎁 景品引き換え画面を開く";
+      if (isCompleted) boxB.classList.add("unlocked");
+      statusB.textContent = isCompleted ? "作成可能" : "未達成（ロック中）";
+      btnB.disabled = !isCompleted;
+      btnB.className = "purple";
+      btnB.textContent = "📸 記念フォトフレームを開く";
     }
   }
 
-  function openRewardModal() {
-    document.getElementById("reward-modal").classList.add("open");
+  // 特典Aモーダル
+  function openTicketModal() {
+    document.getElementById("ticket-modal").classList.add("open");
     updateLiveClock();
     clockTimer = setInterval(updateLiveClock, 1000);
   }
 
-  function closeRewardModal() {
-    document.getElementById("reward-modal").classList.remove("open");
+  function closeTicketModal() {
+    document.getElementById("ticket-modal").classList.remove("open");
     if (clockTimer) clearInterval(clockTimer);
   }
 
-  // スクリーンショット使い回し防止用のリアルタイム時計表示
   function updateLiveClock() {
-    const now = new Date();
-    const str = now.toLocaleString("ja-JP", {
-      year: "numeric", month: "2-digit", day: "2-digit",
-      hour: "2-digit", minute: "2-digit", second: "2-digit"
-    });
-    document.getElementById("live-clock").textContent = `● LIVE表示中 ${str}`;
+    document.getElementById("live-clock").textContent = `● LIVE表示中 ${formatNow()}`;
   }
 
-  function redeemReward() {
-    const ok = confirm("【スタッフ確認】\n景品をお渡ししましたか？\n「OK」を押すと引き換え済みになり、元に戻せません。");
-    if (!ok) return;
-
-    const now = new Date();
-    const timestamp = now.toLocaleString("ja-JP", {
-      year: "numeric", month: "2-digit", day: "2-digit",
-      hour: "2-digit", minute: "2-digit", second: "2-digit"
-    });
-
-    localStorage.setItem("test_redeemed", JSON.stringify({
-      redeemed: true,
-      timestamp: timestamp
-    }));
-
+  function redeemRewardA() {
+    if (!confirm("【スタッフ確認】\n景品をお渡ししましたか？\n「OK」を押すと引き換え済みになり、元に戻せません。")) return;
+    const state = getRewardsState();
+    const ts = formatNow();
+    state.rewardA = ts;
+    saveRewardsState(state);
     renderUI();
-    document.getElementById("scan-log").textContent = `🎁 景品引き換え完了を記録しました（${timestamp}）`;
+    document.getElementById("scan-log").textContent = `🎫 特典A 引き換え完了を記録しました（${ts}）`;
   }
 
-  function resetAllData() {
-    if (!confirm("スタンプ獲得状況と引き換え済み履歴をすべてリセットしますか？")) return;
-    localStorage.removeItem("test_stamps");
-    localStorage.removeItem("test_redeemed");
-    renderUI();
-    document.getElementById("scan-log").textContent = "スタンプと引き換え履歴をリセットしました。";
+  // 特典B：記念フォトフレームモーダル＆Canvas合成
+  function openFrameModal() {
+    document.getElementById("frame-modal").classList.add("open");
+    drawFrame();
   }
-</script>
-</body>
-</html>
+
+  function closeFrameModal() {
+    document.getElementById("frame-modal").classList.remove("open");
+  }
+
+  function handlePhotoUpload(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const img = new Image();
+      img.onload = () => {
+        uploadedImg = img;
+        imgScale = 1.0;
+        imgOffsetX = 0;
+        imgOffsetY = 0;
+        document.getElementById("zoom-range").value = 100;
+        document.getElementById("zoom-val").textContent = "100";
+        drawFrame();
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function updateZoom() {
+    const v = parseInt(document.getElementById("zoom-range").value, 10);
+    document.getElementById("zoom-val").textContent = v;
+    imgScale = v / 100;
+    drawFrame();
+  }
+
+  function initCanvasDrag() {
+    const canvas = document.getElementById("frame-canvas");
+
+    const getPos = evt => {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const clientX = evt.touches ? evt.touches[0].clientX : evt.clientX;
+      const clientY = evt.touches ? evt.touches[0].clientY : evt.clientY;
+      return {
+        x: (clientX - rect.left) * scaleX,
+        y: (clientY - rect.top) * scaleY
+      };
+    };
+
+    const onDown = evt => {
+      if (!uploadedImg) return;
+      isDragging = true;
+      const p = getPos(evt);
+      dragStartX = p.x - imgOffsetX;
+      dragStartY = p.y - imgOffsetY;
+    };
+
+    const onMove = evt => {
+      if (!isDragging || !uploadedImg) return;
+      evt.preventDefault();
+      const p = getPos(evt);
+      imgOffsetX = p.x - dragStartX;
+      imgOffsetY = p.y - dragStartY;
+      drawFrame();
+    };
+
+    const onUp = () => { isDragging = false; };
+
+    canvas.addEventListener("mousedown", onDown);
+    canvas.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+
+    canvas.addEventListener("touchstart", onDown, { passive: false });
+    canvas.addEventListener("touchmove", onMove, { passive: false });
+    window.addEventListener("touchend", onUp);
+  }
+
+  function drawFrame() {
+    const canvas = document.getElementById("frame-canvas");
+    const ctx = canvas.getContext("2d");
+    const w = canvas.width;
+    const h = canvas.height;
+    const styleType = document.getElementById("frame-style").value;
+
+    ctx.clearRect(0, 0, w, h);
+
+    // ベース背景
+    ctx.fillStyle = "#e2e8f0";
+    ctx.fillRect(0, 0, w, h);
+
+    // ユーザー写真描画
+    if (uploadedImg) {
+      const baseRatio = Math.max(w / uploadedImg.width, h / uploadedImg.height);
+      const drawW = uploadedImg.width * baseRatio * imgScale;
+      const drawH = uploadedImg.height * baseRatio * imgScale;
+      const drawX = (w - drawW) / 2 + imgOffsetX;
+      const drawY = (h - drawH) / 2 + imgOffsetY;
+      ctx.drawImage(uploadedImg, drawX, drawY, drawW, drawH);
+    } else {
+      ctx.fillStyle = "#64748b";
+      ctx.font = "bold 26px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("写真を選択するとここにプレビューされます", w / 2, h / 2 - 14);
+      ctx.font = "18px sans-serif";
+      ctx.fillText("下の「ファイルを選択」から画像を選んでください", w / 2, h / 2 + 20);
+    }
+
+    // フレーム枠・装飾描画
+    const borderW = 24;
+    if (styleType === "festival") {
+      ctx.strokeStyle = "#1e3a8a";
+      ctx.lineWidth = borderW;
+      ctx.strokeRect(borderW / 2, borderW / 2, w - borderW, h - borderW);
+
+      ctx.strokeStyle = "#f59e0b";
+      ctx.lineWidth = 6;
+      ctx.strokeRect(borderW + 6, borderW + 6, w - (borderW + 6) * 2, h - (borderW + 6) * 2);
+
+      // 上部バッジ
